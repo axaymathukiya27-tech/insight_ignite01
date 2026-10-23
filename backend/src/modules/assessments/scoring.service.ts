@@ -5,15 +5,20 @@ import {
   AssessmentFactorDefinition,
 } from "@insight-ignite/database";
 import {
+  AnswerEvidenceDto,
   AssessmentAnswerItem,
   FactorScoreDto,
   AreaSummaryDto,
+  PracticePlanDayTemplateDto,
+  PracticeRecommendationDto,
   ResultClassification,
   ScoringDirection,
 } from "@insight-ignite/shared";
 import {
   DimensionResult,
   buildGrowthArea,
+  buildPracticePlan,
+  buildPracticeRecommendations,
   buildSteadyArea,
   buildStrength,
   withInterpretation,
@@ -56,6 +61,7 @@ export const FactorGuidanceTemplateSchema = z.object({
   growthBehavior: z.string().optional(),
   growthActions: z.array(z.string().min(1)).min(1).max(5).optional(),
   growthExample: z.string().optional(),
+  growthGoal: z.string().optional(),
   steadyExplanation: z.string().optional(),
   steadyTip: z.string().optional(),
 });
@@ -87,6 +93,8 @@ export interface ComputedAssessmentPayload {
   strengths: AreaSummaryDto[];
   growthAreas: AreaSummaryDto[];
   steadyAreas: AreaSummaryDto[];
+  practicePlan: PracticePlanDayTemplateDto[];
+  practiceRecommendations: PracticeRecommendationDto[];
   rawAnswersWithValues: Array<{
     itemId: string;
     selectedOptionId: string;
@@ -149,6 +157,7 @@ export function calculateAssessmentScores(
   const growthAreas: AreaSummaryDto[] = [];
   const steadyAreas: AreaSummaryDto[] = [];
   const reverseScored = new Set(config.reverseScoredFactors);
+  const dimensions: DimensionResult[] = [];
   let totalInterpretedSum = 0;
 
   for (const factor of factors) {
@@ -163,6 +172,8 @@ export function calculateAssessmentScores(
     let factorRawSum = 0;
     let factorInterpretedSum = 0;
     let factorMaxSum = 0;
+    // Where each answer sits on its own scale after reverse-scoring (0 = least positive, 1 = most)
+    const answered: Array<{ prompt: string; answerLabel: string; position: number }> = [];
 
     for (const item of factorItems) {
       const selectedOptionId = answerMap.get(item.id);
@@ -210,11 +221,19 @@ export function calculateAssessmentScores(
 
       factorRawSum += selectedOption.value;
       // Reverse-scoring maps the scale onto itself (e.g. 1..5 becomes 5..1)
-      factorInterpretedSum +=
+      const interpretedValue =
         direction === "HIGHER_IS_CONCERN"
           ? minOptionValue + maxOptionValue - selectedOption.value
           : selectedOption.value;
+      factorInterpretedSum += interpretedValue;
       factorMaxSum += maxOptionValue;
+      if (maxOptionValue > minOptionValue) {
+        answered.push({
+          prompt: item.prompt,
+          answerLabel: selectedOption.label,
+          position: (interpretedValue - minOptionValue) / (maxOptionValue - minOptionValue),
+        });
+      }
 
       rawAnswersWithValues.push({
         itemId: item.id,
@@ -241,12 +260,15 @@ export function calculateAssessmentScores(
       interpretedPercentage,
       band: band.name,
       classification,
+      evidence: selectEvidence(answered),
     };
 
+    dimensions.push(dimension);
     factorScores[factor.code] = withInterpretation(
       {
         factorCode: factor.code,
         factorName: factor.name,
+        orderIndex: factor.orderIndex,
         rawScore: factorRawSum,
         maxScore: factorMaxSum,
         percentage,
@@ -273,6 +295,9 @@ export function calculateAssessmentScores(
       (factorScores[b.factorCode].interpretedPercentage ?? 0)
   );
 
+  const practicePlan = buildPracticePlan(dimensions, config.guidanceTemplates);
+  const practiceRecommendations = buildPracticeRecommendations(dimensions, config.guidanceTemplates, practicePlan);
+
   return {
     factorScores,
     // Sum after reverse-scoring, as the instrument specification requires for an overall score
@@ -280,8 +305,32 @@ export function calculateAssessmentScores(
     strengths,
     growthAreas,
     steadyAreas,
+    practicePlan,
+    practiceRecommendations,
     rawAnswersWithValues,
   };
+}
+
+/**
+ * Picks the parent's own answers that best illustrate a dimension: up to two answers on the
+ * positive half of the scale ("supports") and up to two on the other half ("practice").
+ * Answers exactly at the midpoint are neutral and never quoted. This only selects which
+ * answers to quote; it plays no part in scoring or classification.
+ */
+export function selectEvidence(
+  answered: Array<{ prompt: string; answerLabel: string; position: number }>
+): AnswerEvidenceDto[] {
+  const supports = answered
+    .filter((a) => a.position > 0.5)
+    .sort((a, b) => b.position - a.position)
+    .slice(0, 2)
+    .map((a) => ({ prompt: a.prompt, answerLabel: a.answerLabel, signal: "supports" as const }));
+  const practice = answered
+    .filter((a) => a.position < 0.5)
+    .sort((a, b) => a.position - b.position)
+    .slice(0, 2)
+    .map((a) => ({ prompt: a.prompt, answerLabel: a.answerLabel, signal: "practice" as const }));
+  return [...supports, ...practice];
 }
 
 /**

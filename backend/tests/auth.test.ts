@@ -1,3 +1,4 @@
+import "./local-db-guard";
 import { createApp } from "../src/app";
 import { Server } from "http";
 import { prisma, UserRole } from "@insight-ignite/database";

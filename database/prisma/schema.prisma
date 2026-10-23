@@ -62,6 +62,7 @@ model User {
   progress              LessonProgress[]
   assessmentSubmissions AssessmentSubmission[]
   assessmentAuditLogs   AssessmentAuditLog[]
+  practicePlans         AssessmentPracticePlan[]
 
   @@map("users")
 }
@@ -381,6 +382,7 @@ model AssessmentSubmission {
   user                 User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
   rawResponses         AssessmentRawResponse[]
   result               AssessmentResult?
+  practicePlan         AssessmentPracticePlan?
 
   @@index([userId])
   @@index([versionId])
@@ -451,3 +453,39 @@ model AssessmentAuditLog {
   @@map("assessment_audit_logs")
 }
 
+
+// Seven-day practice plan started by a signed-in parent from one completed assessment
+// attempt. The plan content is a snapshot taken when the plan is started, so later wording
+// changes never alter a plan the parent is already following.
+model AssessmentPracticePlan {
+  id           String                   @id @default(uuid())
+  submissionId String                   @unique
+  userId       String
+  days         Json
+  startedAt    DateTime                 @default(now())
+  completedAt  DateTime?
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  submission   AssessmentSubmission     @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  user         User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  progress     AssessmentPracticeDay[]
+
+  @@index([userId])
+  @@map("assessment_practice_plans")
+}
+
+model AssessmentPracticeDay {
+  id          String                 @id @default(uuid())
+  planId      String
+  dayNumber   Int
+  completedAt DateTime?
+  note        String?                @db.VarChar(1000)
+  updatedAt   DateTime               @updatedAt
+
+  plan        AssessmentPracticePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, dayNumber])
+  @@index([planId])
+  @@map("assessment_practice_days")
+}

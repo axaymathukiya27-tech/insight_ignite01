@@ -5,6 +5,7 @@ import coursesRouter from "../modules/courses/courses.routes";
 import assessmentsRouter from "../modules/assessments/assessments.routes";
 import adminAssessmentsRouter from "../modules/assessments/admin-assessments.routes";
 import contactRouter from "../modules/contact/contact.routes";
+import adminRouter from "../modules/admin/admin.routes";
 import { requireAuth, requireRole, requireVerifiedEmail } from "../middleware/auth.middleware";
 import { UserRole } from "@insight-ignite/database";
 import { sendSuccess } from "../utils/response";
@@ -18,6 +19,7 @@ apiRouter.use("/courses", coursesRouter);
 apiRouter.use("/assessments", assessmentsRouter);
 apiRouter.use("/admin/assessments", adminAssessmentsRouter);
 apiRouter.use("/contact", contactRouter);
+apiRouter.use("/admin/platform", adminRouter);
 
 // Protected learner route (requires authenticated session AND verified email)
 apiRouter.get("/learner/profile", requireAuth, requireVerifiedEmail, (req, res) => {

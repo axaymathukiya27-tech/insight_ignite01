@@ -75,6 +75,18 @@ export interface PublicCourseSummary {
   createdAt: string;
 }
 
+export interface MyEnrollmentDto {
+  courseId: string;
+  slug: string;
+  title: string;
+  subtitle?: string | null;
+  instructor: string;
+  lessonCount: number;
+  progressPct: number;
+  enrolledAt: string;
+  completedAt: string | null;
+}
+
 export interface PublicCourseDetail extends PublicCourseSummary {
   lessons: LessonSummary[];
 }
@@ -151,6 +163,7 @@ export type ResultClassification = "STRENGTH" | "STEADY" | "GROWTH_OPPORTUNITY";
 export interface FactorScoreDto {
   factorCode: string;
   factorName: string;
+  orderIndex?: number; // Dimension order in the assessment (JSON storage does not keep key order)
   rawScore: number; // Sum of the answers as given (never reversed)
   maxScore: number;
   percentage: number; // rawScore / maxScore as answered: what the progress bar shows
@@ -163,6 +176,17 @@ export interface FactorScoreDto {
   classification?: ResultClassification;
   dimensionDescription?: string | null; // What the dimension measures
   interpretation?: string; // Direction-aware reading of this score
+  // Up to two of the parent's own answers that most support, and most qualify, this
+  // result (question text + the option they chose). Only shown to the report's owner.
+  evidence?: AnswerEvidenceDto[];
+}
+
+export interface AnswerEvidenceDto {
+  prompt: string;
+  answerLabel: string;
+  // "supports": the answer is on the positive side of the scale for this dimension.
+  // "practice": the answer is on the side of the scale this dimension would improve towards.
+  signal: "supports" | "practice";
 }
 
 export interface AreaSummaryDto {
@@ -179,6 +203,53 @@ export interface AreaSummaryDto {
   behaviorFocus?: string; // Growth: the behaviour that could benefit from attention
   actions?: string[]; // Growth: two or three practical actions
   example?: string; // Growth: an everyday example of responding differently
+  whatItMeasures?: string; // Plain-language description of the dimension
+  indicates?: string; // What this parent's answers indicate (personalized)
+  smallGoal?: string; // Growth: one small, achievable goal
+  evidence?: AnswerEvidenceDto[];
+}
+
+/** A practical, result-specific recommendation (deterministic, rules-based). */
+export interface PracticeRecommendationDto {
+  factorCode: string;
+  factorName: string;
+  kind: "growth" | "steady" | "strength";
+  finding: string; // The assessment finding it addresses, e.g. "Autonomy and Independence: 40%, Area for Growth"
+  title: string;
+  what: string;
+  when: string;
+  how: string;
+  example: string;
+  objective: string;
+  planDays: number[]; // Days of the seven-day plan that practise it
+}
+
+/** One day of the seven-day practice plan, generated from the result. */
+export interface PracticePlanDayTemplateDto {
+  day: number;
+  title: string;
+  factorCodes: string[];
+  factorNames: string[];
+  objective: string;
+  exercise: string;
+  minutes: number;
+  example: string;
+  reflection: string;
+}
+
+export interface PracticePlanDayDto extends PracticePlanDayTemplateDto {
+  completedAt: string | null;
+  note: string | null;
+}
+
+export interface PracticePlanDto {
+  submissionId: string;
+  started: boolean;
+  startedAt: string | null;
+  completedAt: string | null;
+  days: PracticePlanDayDto[];
+  completedCount: number;
+  completionPct: number;
 }
 
 export interface AssessmentRecommendationDto {
@@ -190,6 +261,12 @@ export interface AssessmentRecommendationDto {
   thumbnailUrl?: string | null;
   relevanceReason: string;
   matchingFactorCode: string;
+  // Real catalogue facts, filled in when the report is read (never invented)
+  priceAmount?: number; // minor units (paisa)
+  currency?: string;
+  lessonCount?: number;
+  totalDurationMin?: number | null; // only when every lesson has a duration
+  isEnrolled?: boolean;
 }
 
 export interface AssessmentResultDto {
@@ -203,16 +280,61 @@ export interface AssessmentResultDto {
   growthAreas: AreaSummaryDto[];
   steadyAreas?: AreaSummaryDto[]; // Neither a clear strength nor a growth priority
   recommendedCourses: AssessmentRecommendationDto[];
+  practiceRecommendations?: PracticeRecommendationDto[];
+  practicePlan?: PracticePlanDayTemplateDto[]; // Seven days; empty for legacy results
+  instrumentSlug?: string;
+  instrumentTitle?: string;
   disclaimer: string;
 }
 
 export interface AssessmentSubmissionHistoryItem {
   submissionId: string;
   instrumentTitle: string;
+  instrumentSlug?: string;
+  attemptNumber?: number; // 1 = first completed attempt of this assessment
   versionNumber: number;
   completedAt: string;
   topStrength?: string;
   topGrowthArea?: string;
+  practiceStarted?: boolean;
+  practiceCompletedDays?: number;
+}
+
+export interface ProgressComparisonRowDto {
+  factorCode: string;
+  factorName: string;
+  direction: ScoringDirection;
+  earlier: number; // percentage as answered
+  latest: number;
+  difference: number; // percentage points: latest - earlier
+  earlierLabel: string;
+  latestLabel: string;
+  meaning: string; // Direction-aware, neutral description of the change
+}
+
+export interface AssessmentProgressDto {
+  instrument: { slug: string; title: string; description: string };
+  attempts: Array<{
+    submissionId: string;
+    attemptNumber: number;
+    completedAt: string;
+    versionNumber: number;
+    status: "COMPLETED";
+    scores: Array<{ factorCode: string; factorName: string; percentage: number; band: string; classification: ResultClassification | null }>;
+    comparable: boolean; // Belongs to the same comparable group as the latest attempt
+    practiceStarted: boolean;
+    practiceCompletedDays: number;
+  }>;
+  comparison: {
+    available: boolean;
+    reason?: string; // Why a comparison is not shown
+    firstSubmissionId?: string;
+    latestSubmissionId?: string;
+    firstCompletedAt?: string;
+    latestCompletedAt?: string;
+    comparedAttempts?: number;
+    rows: ProgressComparisonRowDto[];
+  };
 }
 
 // ---------------------------------------------------------------------------

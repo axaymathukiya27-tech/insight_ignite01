@@ -6,7 +6,9 @@ import {
   getAssessmentResult,
   claimAssessment,
   getUserAssessmentHistory,
+  getAssessmentProgress,
 } from "./assessments.service";
+import { getPracticePlan, startPracticePlan, updatePracticeDay } from "./practice-plan.service";
 import {
   ASSESSMENT_COOKIE_NAME,
   getAssessmentCookieOptions,
@@ -129,6 +131,46 @@ export async function handleGetMyAssessmentHistory(
     const requestId = req.headers["x-request-id"] as string;
     const history = await getUserAssessmentHistory(req.user!.id);
     sendSuccess(res, { history }, undefined, 200, requestId);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleGetAssessmentProgress(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const requestId = req.headers["x-request-id"] as string;
+    const progress = await getAssessmentProgress(String(req.params.slug), req.user!);
+    sendSuccess(res, { progress }, undefined, 200, requestId);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleGetPracticePlan(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const requestId = req.headers["x-request-id"] as string;
+    const plan = await getPracticePlan(String(req.params.id), req.user!);
+    sendSuccess(res, { plan }, undefined, 200, requestId);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleStartPracticePlan(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const requestId = req.headers["x-request-id"] as string;
+    const plan = await startPracticePlan(String(req.params.id), req.user!);
+    sendSuccess(res, { plan }, "Your seven-day practice plan has started.", 200, requestId);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleUpdatePracticeDay(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const requestId = req.headers["x-request-id"] as string;
+    const plan = await updatePracticeDay(String(req.params.id), Number(req.params.day), req.body, req.user!);
+    sendSuccess(res, { plan }, undefined, 200, requestId);
   } catch (error) {
     next(error);
   }

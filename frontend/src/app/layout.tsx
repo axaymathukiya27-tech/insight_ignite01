@@ -46,7 +46,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${sansFont.variable} ${serifFont.variable} scroll-smooth`}>
+    <html
+      lang="en"
+      data-scroll-behavior="smooth"
+      className={`${sansFont.variable} ${serifFont.variable} scroll-smooth`}
+    >
       <body className="min-h-screen bg-[#FAF8F5] text-[#2D241E] font-sans antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>

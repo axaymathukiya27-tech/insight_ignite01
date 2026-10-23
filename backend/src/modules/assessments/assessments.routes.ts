@@ -7,12 +7,17 @@ import {
   handleGetResult,
   handleClaimAssessment,
   handleGetMyAssessmentHistory,
+  handleGetAssessmentProgress,
+  handleGetPracticePlan,
+  handleStartPracticePlan,
+  handleUpdatePracticeDay,
 } from "./assessments.controller";
 import { authenticate, requireAuth } from "../../middleware/auth.middleware";
 import { validateRequest } from "../../middleware/validate.middleware";
 import {
   SubmitAssessmentInputSchema,
   ClaimAssessmentInputSchema,
+  UpdatePracticeDayInputSchema,
 } from "@insight-ignite/shared";
 import { sendError } from "../../utils/response";
 
@@ -102,5 +107,23 @@ router.post(
  * Protected: Requires authentication. Restricted strictly to caller's records.
  */
 router.get("/my-history", requireAuth, handleGetMyAssessmentHistory);
+
+/**
+ * All completed attempts of one assessment for the signed-in parent, with a comparison of
+ * directly comparable attempts. Restricted to the caller's own records.
+ */
+router.get("/my-progress/:slug", requireAuth, handleGetAssessmentProgress);
+
+/**
+ * Seven-day practice plan for one completed attempt. Owner only (checked server-side).
+ */
+router.get("/results/:id/practice-plan", requireAuth, handleGetPracticePlan);
+router.post("/results/:id/practice-plan/start", requireAuth, handleStartPracticePlan);
+router.put(
+  "/results/:id/practice-plan/days/:day",
+  requireAuth,
+  validateRequest({ body: UpdatePracticeDayInputSchema }),
+  handleUpdatePracticeDay
+);
 
 export default router;

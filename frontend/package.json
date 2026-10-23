@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx tests/assessments-frontend.test.ts && tsx tests/admin-assessments-ui.test.ts"
+    "test": "tsx tests/assessments-frontend.test.ts && tsx tests/admin-assessments-ui.test.ts && tsx tests/report-view.test.tsx"
   },
   "dependencies": {
     "next": "16.4.2",

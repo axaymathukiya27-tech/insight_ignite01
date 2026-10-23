@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "lint": "echo \"Backend linting placeholder\"",
-    "test": "tsx tests/api.test.ts && tsx tests/database-error.test.ts && tsx tests/auth.test.ts && tsx tests/courses.test.ts && tsx tests/assessments.test.ts && tsx tests/admin-assessments.test.ts"
+    "test": "tsx tests/api.test.ts && tsx tests/database-error.test.ts && tsx tests/auth.test.ts && tsx tests/courses.test.ts && tsx tests/assessments.test.ts && tsx tests/admin-assessments.test.ts && tsx tests/scoring-direction.test.ts && tsx tests/report-personalization.test.ts && tsx tests/scoring-direction-api.test.ts && tsx tests/practice-progress-api.test.ts"
   },
   "dependencies": {
     "@insight-ignite/database": "*",

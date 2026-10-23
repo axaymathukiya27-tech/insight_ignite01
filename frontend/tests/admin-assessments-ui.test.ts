@@ -19,6 +19,17 @@ import {
 } from "../src/features/assessments/admin-api";
 import { prisma, UserRole, CourseStatus } from "@insight-ignite/database";
 
+// This suite writes users, sessions and assessments through Prisma. Without an explicit
+// DATABASE_URL, Prisma falls back to database/.env (the real database), so refuse to run
+// unless the target is a local database whose name ends in "_test".
+{
+  const target = new URL(process.env.DATABASE_URL || "postgresql://invalid/none");
+  if (!["127.0.0.1", "localhost", "::1"].includes(target.hostname) || !/_test$/.test(target.pathname.slice(1))) {
+    console.error("REFUSED: set DATABASE_URL to a local *_test database before running this suite.");
+    process.exit(2);
+  }
+}
+
 async function runAdminAssessmentsUiApiSuite() {
   console.log("======================================================");
   console.log("   INSIGHT IGNITE — PHASE 4C ADMIN UI API INTEGRATION ");

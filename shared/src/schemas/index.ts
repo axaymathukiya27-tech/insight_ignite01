@@ -141,6 +141,18 @@ export const ClaimAssessmentInputSchema = z.object({
 });
 export type ClaimAssessmentInput = z.infer<typeof ClaimAssessmentInputSchema>;
 
+// Marking one day of a seven-day practice plan (complete / not complete, optional note)
+export const UpdatePracticeDayInputSchema = z.object({
+  completed: z.boolean(),
+  note: z
+    .string()
+    .trim()
+    .max(1000, "Reflection notes can be up to 1000 characters")
+    .optional()
+    .nullable(),
+});
+export type UpdatePracticeDayInput = z.infer<typeof UpdatePracticeDayInputSchema>;
+
 // Option schema for question items
 export const AssessmentOptionSchema = z.object({
   id: z.string().min(1, "Option ID is required"),

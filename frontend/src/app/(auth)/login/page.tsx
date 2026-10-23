@@ -34,7 +34,10 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const user = await login({ email, password });
+      const user = await login({
+        email: email.trim(),
+        password: password.trim(),
+      });
 
       // Determine safe redirect destination
       let destination = "/learn";

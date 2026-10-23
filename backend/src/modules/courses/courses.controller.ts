@@ -7,6 +7,7 @@ import {
   createCourse,
   updateCourse,
   setCourseStatus,
+  getMyEnrollments,
 } from "./courses.service";
 import { sendSuccess, sendError } from "../../utils/response";
 import { CourseStatus } from "@insight-ignite/database";
@@ -135,6 +136,16 @@ export async function handleUnpublishCourse(
     const { id } = req.params;
     const course = await setCourseStatus(id, CourseStatus.DRAFT);
     sendSuccess(res, { course }, "Course unpublished (set to draft).", 200, requestId);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleGetMyEnrollments(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const requestId = req.headers["x-request-id"] as string;
+    const enrollments = await getMyEnrollments(req.user!.id);
+    sendSuccess(res, { enrollments }, undefined, 200, requestId);
   } catch (error) {
     next(error);
   }

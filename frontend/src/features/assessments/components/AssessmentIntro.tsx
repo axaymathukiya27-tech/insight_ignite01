@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { PublicAssessmentInstrument } from "@insight-ignite/shared";
 import { DEFAULT_CONSENT_NOTICE_VERSION } from "../api";
+import MyAttemptsCard from "./MyAttemptsCard";
 
 interface Props {
   instrument: PublicAssessmentInstrument;
@@ -21,6 +22,8 @@ export default function AssessmentIntro({ instrument, onConsentGiven }: Props) {
   };
 
   return (
+    <>
+    <MyAttemptsCard slug={instrument.slug} />
     <div className="max-w-3xl mx-auto my-8 px-4 sm:px-6">
       <div className="bg-white rounded-3xl p-8 sm:p-12 border border-[#E3D8CC] shadow-sm space-y-8">
         {/* Header */}
@@ -153,5 +156,6 @@ export default function AssessmentIntro({ instrument, onConsentGiven }: Props) {
         </div>
       </div>
     </div>
+    </>
   );
 }

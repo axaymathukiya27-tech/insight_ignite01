@@ -91,3 +91,46 @@ export async function getApprovedCourseRecommendations(
 
   return recommendations;
 }
+
+/**
+ * Re-checks stored course suggestions against the live catalogue when a report is shown:
+ * courses that are no longer published are dropped, and real catalogue facts (price,
+ * lesson count, total duration when every lesson has one, and whether this parent is
+ * already enrolled) are filled in. Nothing is invented when a fact is missing.
+ */
+export async function refreshCourseRecommendations(
+  stored: AssessmentRecommendationDto[],
+  userId?: string
+): Promise<AssessmentRecommendationDto[]> {
+  if (!stored || stored.length === 0) return [];
+  const courses = await prisma.course.findMany({
+    where: { id: { in: stored.map((c) => c.courseId) }, status: CourseStatus.PUBLISHED },
+    include: {
+      lessons: { select: { durationMin: true } },
+      enrollments: userId ? { where: { userId }, select: { id: true } } : false,
+    },
+  });
+  const byId = new Map(courses.map((c) => [c.id, c]));
+  return stored
+    .filter((rec) => byId.has(rec.courseId))
+    .map((rec) => {
+      const c = byId.get(rec.courseId)!;
+      const durations = c.lessons.map((l) => l.durationMin);
+      return {
+        ...rec,
+        slug: c.slug,
+        title: c.title,
+        subtitle: c.subtitle,
+        instructor: c.instructor,
+        thumbnailUrl: c.thumbnailUrl,
+        priceAmount: c.priceAmount,
+        currency: c.currency,
+        lessonCount: c.lessons.length,
+        totalDurationMin:
+          durations.length > 0 && durations.every((d) => typeof d === "number")
+            ? durations.reduce((a, b) => a + (b as number), 0)
+            : null,
+        isEnrolled: userId ? (c.enrollments?.length ?? 0) > 0 : undefined,
+      };
+    });
+}

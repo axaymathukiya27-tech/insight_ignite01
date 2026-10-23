@@ -8,6 +8,7 @@ import {
   handleUpdateCourse,
   handlePublishCourse,
   handleUnpublishCourse,
+  handleGetMyEnrollments,
 } from "./courses.controller";
 import { requireAuth, requireRole } from "../../middleware/auth.middleware";
 import { validateRequest } from "../../middleware/validate.middleware";
@@ -24,6 +25,9 @@ const router = Router();
 // Only returns courses where status = PUBLISHED
 // =============================================================================
 router.get("/", handleGetPublicCourses);
+
+// The signed-in learner's own enrollments (declared before /:slug)
+router.get("/my/enrollments", requireAuth, handleGetMyEnrollments);
 router.get("/:slug", handleGetPublicCourseBySlug);
 
 // =============================================================================

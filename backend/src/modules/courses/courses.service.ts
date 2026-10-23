@@ -6,6 +6,7 @@ import {
   PublicCourseDetail,
   AdminCourseSummary,
   AdminCourseDetail,
+  MyEnrollmentDto,
 } from "@insight-ignite/shared";
 
 export class CourseError extends Error {
@@ -335,4 +336,26 @@ export async function setCourseStatus(
       isFreePreview: l.isFreePreview,
     })),
   };
+}
+
+/**
+ * The signed-in learner's own enrollments (real records only), newest first.
+ */
+export async function getMyEnrollments(userId: string): Promise<MyEnrollmentDto[]> {
+  const enrollments = await prisma.enrollment.findMany({
+    where: { userId },
+    include: { course: { include: { _count: { select: { lessons: true } } } } },
+    orderBy: { enrolledAt: "desc" },
+  });
+  return enrollments.map((e) => ({
+    courseId: e.courseId,
+    slug: e.course.slug,
+    title: e.course.title,
+    subtitle: e.course.subtitle,
+    instructor: e.course.instructor,
+    lessonCount: e.course._count.lessons,
+    progressPct: e.progressPct,
+    enrolledAt: e.enrolledAt.toISOString(),
+    completedAt: e.completedAt ? e.completedAt.toISOString() : null,
+  }));
 }

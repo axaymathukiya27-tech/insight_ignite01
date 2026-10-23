@@ -3,6 +3,9 @@ import {
   AssessmentResultDto,
   AssessmentSubmissionHistoryItem,
   SubmitAssessmentInput,
+  PracticePlanDto,
+  AssessmentProgressDto,
+  MyEnrollmentDto,
 } from "@insight-ignite/shared";
 import { apiFetch, ApiError } from "@/lib/api-client";
 
@@ -117,4 +120,48 @@ export async function getMyAssessmentHistory(): Promise<
     "/assessments/my-history"
   );
   return res.history || [];
+}
+
+/** The seven-day practice plan for one of the signed-in parent's results. */
+export async function getPracticePlan(submissionId: string): Promise<PracticePlanDto> {
+  const res = await apiFetch<{ plan: PracticePlanDto }>(
+    `/assessments/results/${encodeURIComponent(submissionId)}/practice-plan`
+  );
+  return res.plan;
+}
+
+/** Starts the plan (safe to call more than once). */
+export async function startPracticePlan(submissionId: string): Promise<PracticePlanDto> {
+  const res = await apiFetch<{ plan: PracticePlanDto }>(
+    `/assessments/results/${encodeURIComponent(submissionId)}/practice-plan/start`,
+    { method: "POST" }
+  );
+  return res.plan;
+}
+
+/** Marks a day complete / not complete and saves the reflection note. */
+export async function updatePracticeDay(
+  submissionId: string,
+  day: number,
+  input: { completed: boolean; note?: string | null }
+): Promise<PracticePlanDto> {
+  const res = await apiFetch<{ plan: PracticePlanDto }>(
+    `/assessments/results/${encodeURIComponent(submissionId)}/practice-plan/days/${day}`,
+    { method: "PUT", body: JSON.stringify(input) }
+  );
+  return res.plan;
+}
+
+/** Every completed attempt of one assessment, with a comparison of comparable attempts. */
+export async function getAssessmentProgress(slug: string): Promise<AssessmentProgressDto> {
+  const res = await apiFetch<{ progress: AssessmentProgressDto }>(
+    `/assessments/my-progress/${encodeURIComponent(slug)}`
+  );
+  return res.progress;
+}
+
+/** The signed-in learner's real course enrollments. */
+export async function getMyEnrollments(): Promise<MyEnrollmentDto[]> {
+  const res = await apiFetch<{ enrollments: MyEnrollmentDto[] }>("/courses/my/enrollments");
+  return res.enrollments || [];
 }

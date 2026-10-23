@@ -3,8 +3,6 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/context/AuthContext";
@@ -20,47 +18,19 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-[#2D241E]">
-        <Navbar />
-        <main className="flex-grow flex items-center justify-center py-20">
-          <p className="text-sm text-[#7A6A5E] animate-pulse">Loading profile...</p>
-        </main>
-        <Footer />
-      </div>
+      <main className="flex items-center justify-center py-20">
+        <p className="text-sm text-[#7A6A5E] animate-pulse">Loading profile...</p>
+      </main>
     );
   }
 
   const initial = user?.fullName?.charAt(0).toUpperCase() || "L";
   const memberDate = user?.createdAt
     ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
-    : "October 2026";
+    : null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-[#2D241E]">
-      <Navbar />
-
-      <main className="flex-grow max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10 space-y-8">
-        {/* Breadcrumb & Navigation */}
-        <div className="flex items-center justify-between">
-          <nav aria-label="Breadcrumb" className="text-xs text-[#7A6A5E]">
-            <Link href="/" className="hover:text-[#2D241E] transition-colors">
-              Home
-            </Link>{" "}
-            &rarr;{" "}
-            <Link href="/learn" className="hover:text-[#2D241E] transition-colors">
-              Learner Portal
-            </Link>{" "}
-            &rarr;{" "}
-            <span className="font-semibold text-[#2D241E]">Profile & Settings</span>
-          </nav>
-
-          <Link
-            href="/learn"
-            className="text-xs font-semibold text-[#8C5E42] hover:text-[#724B34] transition-colors"
-          >
-            &larr; Return to Study Space
-          </Link>
-        </div>
+    <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10 space-y-8">
 
         {/* Profile Card Header */}
         <Card className="p-8 sm:p-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
@@ -76,7 +46,7 @@ export default function ProfilePage() {
                 {user?.fullName || "Active Learner"}
               </h1>
               <p className="text-xs sm:text-sm text-[#6B5A4E]">
-                {user?.email || "learner@insightignite.org"} • Member since {memberDate}
+                {user?.email}{memberDate ? ` • Member since ${memberDate}` : ""}
               </p>
             </div>
           </div>
@@ -167,9 +137,6 @@ export default function ProfilePage() {
             </Link>
           </div>
         </Card>
-      </main>
-
-      <Footer />
-    </div>
+    </main>
   );
 }
