@@ -8,7 +8,16 @@ import {
   AssessmentAnswerItem,
   FactorScoreDto,
   AreaSummaryDto,
+  ResultClassification,
+  ScoringDirection,
 } from "@insight-ignite/shared";
+import {
+  DimensionResult,
+  buildGrowthArea,
+  buildSteadyArea,
+  buildStrength,
+  withInterpretation,
+} from "./report-content";
 
 export class AssessmentError extends Error {
   constructor(
@@ -40,6 +49,15 @@ export const FactorGuidanceTemplateSchema = z.object({
   strengthHabit: z.string(),
   growthTitle: z.string(),
   growthHabit: z.string(),
+  // Optional richer report wording (authored and approved per dimension)
+  strengthExplanation: z.string().optional(),
+  strengthWhy: z.string().optional(),
+  growthExplanation: z.string().optional(),
+  growthBehavior: z.string().optional(),
+  growthActions: z.array(z.string().min(1)).min(1).max(5).optional(),
+  growthExample: z.string().optional(),
+  steadyExplanation: z.string().optional(),
+  steadyTip: z.string().optional(),
 });
 
 export const ApprovedScoringConfigSchema = z.object({
@@ -48,6 +66,10 @@ export const ApprovedScoringConfigSchema = z.object({
   strengthsThresholdPct: z.number().min(0).max(100).default(70),
   growthThresholdPct: z.number().min(0).max(100).default(50),
   guidanceTemplates: z.record(z.string(), FactorGuidanceTemplateSchema).optional(),
+  // Factor codes where a HIGHER answer means a MORE FREQUENT CONCERNING behaviour.
+  // Every item in these factors is reverse-scored (min + max - value) before the
+  // factor is classified and before it is added to the overall score.
+  reverseScoredFactors: z.array(z.string().min(1)).default([]),
 });
 
 export type ApprovedScoringConfig = z.infer<typeof ApprovedScoringConfigSchema>;
@@ -64,6 +86,7 @@ export interface ComputedAssessmentPayload {
   overallScore: number;
   strengths: AreaSummaryDto[];
   growthAreas: AreaSummaryDto[];
+  steadyAreas: AreaSummaryDto[];
   rawAnswersWithValues: Array<{
     itemId: string;
     selectedOptionId: string;
@@ -124,7 +147,9 @@ export function calculateAssessmentScores(
   const factorScores: Record<string, FactorScoreDto> = {};
   const strengths: AreaSummaryDto[] = [];
   const growthAreas: AreaSummaryDto[] = [];
-  let totalRawSum = 0;
+  const steadyAreas: AreaSummaryDto[] = [];
+  const reverseScored = new Set(config.reverseScoredFactors);
+  let totalInterpretedSum = 0;
 
   for (const factor of factors) {
     const factorItems = items.filter((it) => it.factorId === factor.id);
@@ -132,7 +157,11 @@ export function calculateAssessmentScores(
       continue;
     }
 
+    const direction: ScoringDirection = reverseScored.has(factor.code)
+      ? "HIGHER_IS_CONCERN"
+      : "HIGHER_IS_POSITIVE";
     let factorRawSum = 0;
+    let factorInterpretedSum = 0;
     let factorMaxSum = 0;
 
     for (const item of factorItems) {
@@ -175,9 +204,16 @@ export function calculateAssessmentScores(
         );
       }
 
-      const maxOptionValue = Math.max(...options.map((opt) => (typeof opt.value === "number" ? opt.value : 0)));
+      const optionValues = options.map((opt) => (typeof opt.value === "number" ? opt.value : 0));
+      const maxOptionValue = Math.max(...optionValues);
+      const minOptionValue = Math.min(...optionValues);
 
       factorRawSum += selectedOption.value;
+      // Reverse-scoring maps the scale onto itself (e.g. 1..5 becomes 5..1)
+      factorInterpretedSum +=
+        direction === "HIGHER_IS_CONCERN"
+          ? minOptionValue + maxOptionValue - selectedOption.value
+          : selectedOption.value;
       factorMaxSum += maxOptionValue;
 
       rawAnswersWithValues.push({
@@ -187,58 +223,86 @@ export function calculateAssessmentScores(
       });
     }
 
+    // The bar shows the score as answered; classification uses the reverse-scored value
+    // for HIGHER_IS_CONCERN factors, so a high frequency of a concerning behaviour can
+    // never be read as a strength.
     const percentage = factorMaxSum > 0 ? Math.round((factorRawSum / factorMaxSum) * 100) : 0;
-    totalRawSum += factorRawSum;
+    const interpretedPercentage =
+      factorMaxSum > 0 ? Math.round((factorInterpretedSum / factorMaxSum) * 100) : 0;
+    totalInterpretedSum += factorInterpretedSum;
 
-    // Determine band from approved config
-    const matchingBand = config.bands.find(
-      (b) => percentage >= b.minPercentage && percentage <= b.maxPercentage
-    ) || config.bands[0];
-
-    factorScores[factor.code] = {
+    const { band, classification } = classifyPercentage(interpretedPercentage, config);
+    const dimension: DimensionResult = {
       factorCode: factor.code,
       factorName: factor.name,
-      rawScore: factorRawSum,
-      maxScore: factorMaxSum,
+      factorDescription: factor.description,
+      direction,
       percentage,
-      band: matchingBand.name,
-      summaryText: matchingBand.description,
+      interpretedPercentage,
+      band: band.name,
+      classification,
     };
 
-    const guidance = config.guidanceTemplates?.[factor.code];
+    factorScores[factor.code] = withInterpretation(
+      {
+        factorCode: factor.code,
+        factorName: factor.name,
+        rawScore: factorRawSum,
+        maxScore: factorMaxSum,
+        percentage,
+        band: band.name,
+        summaryText: band.description,
+      },
+      dimension
+    );
 
-    if (percentage >= config.strengthsThresholdPct) {
-      strengths.push({
-        factorCode: factor.code,
-        factorName: factor.name,
-        title: guidance?.strengthTitle || `${factor.name} Foundational Strength`,
-        description:
-          factor.description ||
-          `You demonstrate steady awareness and grounded engagement in ${factor.name}.`,
-        actionableHabit:
-          guidance?.strengthHabit ||
-          "Continue nurturing this grounded capacity as an emotional anchor during family challenges.",
-      });
-    } else if (percentage <= config.growthThresholdPct) {
-      growthAreas.push({
-        factorCode: factor.code,
-        factorName: factor.name,
-        title: guidance?.growthTitle || `Cultivating ${factor.name}`,
-        description:
-          factor.description ||
-          `This domain offers an encouraging opportunity to deepen connection and emotional stability.`,
-        actionableHabit:
-          guidance?.growthHabit ||
-          "Practice intentional pause and somatic self-regulation in moments of household tension.",
-      });
+    const guidance = config.guidanceTemplates?.[factor.code];
+    if (classification === "STRENGTH") {
+      strengths.push(buildStrength(dimension, guidance));
+    } else if (classification === "GROWTH_OPPORTUNITY") {
+      growthAreas.push(buildGrowthArea(dimension, guidance));
+    } else {
+      steadyAreas.push(buildSteadyArea(dimension, guidance));
     }
   }
 
+  // Most pressing growth areas first (lowest interpreted score)
+  growthAreas.sort(
+    (a, b) =>
+      (factorScores[a.factorCode].interpretedPercentage ?? 0) -
+      (factorScores[b.factorCode].interpretedPercentage ?? 0)
+  );
+
   return {
     factorScores,
-    overallScore: totalRawSum,
+    // Sum after reverse-scoring, as the instrument specification requires for an overall score
+    overallScore: totalInterpretedSum,
     strengths,
     growthAreas,
+    steadyAreas,
     rawAnswersWithValues,
   };
+}
+
+/**
+ * Maps a (direction-adjusted) percentage to the approved band. The band's own
+ * classification decides the section, so the label shown on a dimension and the section
+ * it appears in can never disagree. If the configuration leaves a gap, the approved
+ * thresholds are used instead of silently falling back to the first band.
+ */
+export function classifyPercentage(
+  pct: number,
+  config: ApprovedScoringConfig
+): { band: { name: string; description?: string }; classification: ResultClassification } {
+  const band = config.bands.find((b) => pct >= b.minPercentage && pct <= b.maxPercentage);
+  if (band) {
+    return { band, classification: band.classification };
+  }
+  if (pct >= config.strengthsThresholdPct) {
+    return { band: { name: "Strength" }, classification: "STRENGTH" };
+  }
+  if (pct <= config.growthThresholdPct) {
+    return { band: { name: "Area for Growth" }, classification: "GROWTH_OPPORTUNITY" };
+  }
+  return { band: { name: "Developing" }, classification: "STEADY" };
 }

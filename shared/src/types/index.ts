@@ -142,22 +142,43 @@ export interface PublicAssessmentInstrument {
   items: PublicAssessmentItem[];
 }
 
+/** Whether a higher score on a dimension is a positive outcome or a more frequent concerning behaviour. */
+export type ScoringDirection = "HIGHER_IS_POSITIVE" | "HIGHER_IS_CONCERN";
+
+/** Interpretation category, taken from the matching band of the approved scoring configuration. */
+export type ResultClassification = "STRENGTH" | "STEADY" | "GROWTH_OPPORTUNITY";
+
 export interface FactorScoreDto {
   factorCode: string;
   factorName: string;
-  rawScore: number;
+  rawScore: number; // Sum of the answers as given (never reversed)
   maxScore: number;
-  percentage: number;
+  percentage: number; // rawScore / maxScore as answered: what the progress bar shows
   band: string; // e.g. "Strength", "Steady", "Growth Opportunity"
   summaryText?: string;
+  // Direction-aware fields. Present on results calculated after the scoring-direction
+  // fix; older stored results do not have them.
+  direction?: ScoringDirection;
+  interpretedPercentage?: number; // After reverse-scoring; equals percentage when HIGHER_IS_POSITIVE
+  classification?: ResultClassification;
+  dimensionDescription?: string | null; // What the dimension measures
+  interpretation?: string; // Direction-aware reading of this score
 }
 
 export interface AreaSummaryDto {
   factorCode: string;
   factorName: string;
   title: string;
-  description: string;
-  actionableHabit: string;
+  description: string; // What the result indicates
+  actionableHabit: string; // Strength: how to maintain it. Growth: the first action to try.
+  // Direction-aware detail (results calculated after the scoring-direction fix)
+  percentage?: number;
+  band?: string;
+  direction?: ScoringDirection;
+  whyItMatters?: string; // Strength: why this counts as a strength
+  behaviorFocus?: string; // Growth: the behaviour that could benefit from attention
+  actions?: string[]; // Growth: two or three practical actions
+  example?: string; // Growth: an everyday example of responding differently
 }
 
 export interface AssessmentRecommendationDto {
@@ -180,6 +201,7 @@ export interface AssessmentResultDto {
   factorScores: Record<string, FactorScoreDto>;
   strengths: AreaSummaryDto[];
   growthAreas: AreaSummaryDto[];
+  steadyAreas?: AreaSummaryDto[]; // Neither a clear strength nor a growth priority
   recommendedCourses: AssessmentRecommendationDto[];
   disclaimer: string;
 }

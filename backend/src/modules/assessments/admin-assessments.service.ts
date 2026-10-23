@@ -234,20 +234,80 @@ export async function createDraftVersion(
     instrument.versions.length > 0 ? instrument.versions[0].versionNumber : 0;
   const newVersionNumber = latestVersionNumber + 1;
 
+  // The new draft starts as a copy of the latest version (factors, questions, scoring
+  // configuration and course mappings), so a correction does not mean re-typing every
+  // question. The earlier version itself is never modified.
+  const source =
+    instrument.versions.length > 0
+      ? await prisma.assessmentVersion.findUnique({
+          where: {
+            instrumentId_versionNumber: { instrumentId: instrument.id, versionNumber: latestVersionNumber },
+          },
+          include: { factors: true, items: true, courseMappings: true },
+        })
+      : null;
+
   const result = await prisma.$transaction(async (tx) => {
     const version = await tx.assessmentVersion.create({
       data: {
         instrumentId: instrument.id,
         versionNumber: newVersionNumber,
         status: AssessmentStatus.DRAFT,
+        scoringConfig: (source?.scoringConfig ?? undefined) as object | undefined,
         disclaimerText:
           input.disclaimerText ||
+          source?.disclaimerText ||
           "This self-assessment is an educational self-reflection tool, not a diagnostic or clinical evaluation.",
         instructionsText:
           input.instructionsText ||
+          source?.instructionsText ||
           "Please answer each reflective prompt honestly based on your typical reactions in daily parenting interactions.",
       },
     });
+
+    if (source) {
+      const factorIdMap = new Map<string, string>();
+      for (const f of source.factors) {
+        const copy = await tx.assessmentFactorDefinition.create({
+          data: {
+            versionId: version.id,
+            code: f.code,
+            name: f.name,
+            tagline: f.tagline,
+            description: f.description,
+            orderIndex: f.orderIndex,
+          },
+        });
+        factorIdMap.set(f.id, copy.id);
+      }
+      for (const it of source.items) {
+        await tx.assessmentItem.create({
+          data: {
+            versionId: version.id,
+            factorId: factorIdMap.get(it.factorId)!,
+            itemKey: it.itemKey,
+            orderIndex: it.orderIndex,
+            prompt: it.prompt,
+            contextPrompt: it.contextPrompt,
+            responseType: it.responseType,
+            options: it.options as object,
+            isRequired: it.isRequired,
+          },
+        });
+      }
+      for (const m of source.courseMappings) {
+        await tx.assessmentCourseMapping.create({
+          data: {
+            versionId: version.id,
+            factorId: factorIdMap.get(m.factorId)!,
+            courseId: m.courseId,
+            triggerCondition: m.triggerCondition,
+            displayOrder: m.displayOrder,
+            customGuidance: m.customGuidance,
+          },
+        });
+      }
+    }
 
     await tx.assessmentAuditLog.create({
       data: {
@@ -259,6 +319,7 @@ export async function createDraftVersion(
         metadata: {
           versionNumber: newVersionNumber,
           status: AssessmentStatus.DRAFT,
+          copiedFromVersion: source ? source.versionNumber : null,
         },
       },
     });
@@ -1067,6 +1128,15 @@ export async function updateVersionScoringConfig(
       }
     }
   }
+  for (const factorCode of validConfig.reverseScoredFactors) {
+    if (!definedCodes.has(factorCode)) {
+      throw new AssessmentError(
+        `reverseScoredFactors references factor code '${factorCode}' which is not defined in this version. Defined factors: [${Array.from(definedCodes).join(", ")}]`,
+        400,
+        "SCORING_CONFIG_INCONSISTENT"
+      );
+    }
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.assessmentVersion.update({
@@ -1425,6 +1495,12 @@ export async function checkActivationReadiness(
         guidanceConsistent = false;
         guidanceMessage = `Guidance templates reference unknown factor(s): [${missingInFactors.join(", ")}].`;
       }
+    }
+    const definedForReverse = new Set(version.factors.map((f) => f.code));
+    const unknownReverse = (config.reverseScoredFactors || []).filter((code) => !definedForReverse.has(code));
+    if (unknownReverse.length > 0) {
+      guidanceConsistent = false;
+      guidanceMessage = `reverseScoredFactors reference unknown factor(s): [${unknownReverse.join(", ")}].`;
     }
   }
 

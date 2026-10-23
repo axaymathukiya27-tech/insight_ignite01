@@ -2,18 +2,39 @@ import { prisma, CourseStatus } from "@insight-ignite/database";
 import { AssessmentRecommendationDto, FactorScoreDto } from "@insight-ignite/shared";
 
 /**
+ * Chooses which dimensions course recommendations should address, using the
+ * direction-aware classification rather than the raw percentage:
+ *   - growth areas first, most pressing (lowest interpreted score) first;
+ *   - if there are none, developing (steady) dimensions;
+ *   - never dimensions classified as strengths.
+ */
+export function selectRecommendationFactors(factorScores: Record<string, FactorScoreDto>): string[] {
+  const scores = Object.values(factorScores);
+  const byNeed = (a: FactorScoreDto, b: FactorScoreDto) =>
+    (a.interpretedPercentage ?? a.percentage) - (b.interpretedPercentage ?? b.percentage);
+  const growth = scores.filter((s) => s.classification === "GROWTH_OPPORTUNITY").sort(byNeed);
+  if (growth.length > 0) return growth.map((s) => s.factorCode);
+  return scores.filter((s) => s.classification === "STEADY").sort(byNeed).map((s) => s.factorCode);
+}
+
+/** Direction-aware sentence explaining why a course is suggested. */
+export function describeRelevance(score: FactorScoreDto | undefined, factorName: string): string {
+  if (!score) return `Suggested to support your growth in ${factorName}.`;
+  const label = score.band ? ` ("${score.band}")` : "";
+  return score.direction === "HIGHER_IS_CONCERN"
+    ? `Suggested because your answers show the behaviours in ${factorName} happen fairly often${label}; this course offers practical alternatives.`
+    : `Suggested to help you build ${factorName}${label} in everyday moments.`;
+}
+
+/**
  * Derives published course recommendations based on approved version mappings
- * for factors where participants have growth opportunities.
+ * for the dimensions selected above.
  */
 export async function getApprovedCourseRecommendations(
   versionId: string,
   factorScores: Record<string, FactorScoreDto>
 ): Promise<AssessmentRecommendationDto[]> {
-  // Sort factors by percentage ascending to prioritize areas of greatest growth
-  const sortedFactors = Object.values(factorScores).sort((a, b) => a.percentage - b.percentage);
-
-  // Focus recommendations on growth areas / lowest-scoring factors
-  const candidateFactorCodes = sortedFactors.map((f) => f.factorCode);
+  const candidateFactorCodes = selectRecommendationFactors(factorScores);
 
   if (candidateFactorCodes.length === 0) {
     return [];
@@ -40,6 +61,13 @@ export async function getApprovedCourseRecommendations(
     },
   });
 
+  // Order by need (the order of candidateFactorCodes), then by displayOrder
+  mappings.sort(
+    (a, b) =>
+      candidateFactorCodes.indexOf(a.factor.code) - candidateFactorCodes.indexOf(b.factor.code) ||
+      a.displayOrder - b.displayOrder
+  );
+
   const seenCourseIds = new Set<string>();
   const recommendations: AssessmentRecommendationDto[] = [];
 
@@ -49,13 +77,6 @@ export async function getApprovedCourseRecommendations(
     }
     seenCourseIds.add(m.courseId);
 
-    const factorScore = factorScores[m.factor.code];
-    const relevanceReason =
-      m.customGuidance ||
-      `Deepen your understanding and daily practice of ${m.factor.name} (currently reflecting ${
-        factorScore ? `${factorScore.percentage}% alignment` : "growth focus"
-      }).`;
-
     recommendations.push({
       courseId: m.course.id,
       slug: m.course.slug,
@@ -63,7 +84,7 @@ export async function getApprovedCourseRecommendations(
       subtitle: m.course.subtitle,
       instructor: m.course.instructor,
       thumbnailUrl: m.course.thumbnailUrl,
-      relevanceReason,
+      relevanceReason: m.customGuidance || describeRelevance(factorScores[m.factor.code], m.factor.name),
       matchingFactorCode: m.factor.code,
     });
   }

@@ -1412,6 +1412,53 @@ export default function AdminAssessmentWorkspacePage() {
               )}
 
               <form onSubmit={handleSaveScoringConfig} className="space-y-4">
+                {/* Scoring direction per dimension (writes reverseScoredFactors in the JSON) */}
+                {(versionDetail.factors?.length ?? 0) > 0 && (
+                  <fieldset className="p-4 rounded-2xl border border-[#E3D8CC] bg-[#FAF8F5] space-y-2">
+                    <legend className="px-1 text-xs font-bold uppercase tracking-wider text-[#5C4D42]">
+                      Scoring direction
+                    </legend>
+                    <p className="text-xs text-[#6B5A4E]">
+                      Tick a dimension only if a <strong>higher</strong> answer means a <strong>more frequent concerning behaviour</strong> (for example criticism or control). Its questions are then reverse-scored, so a high score can never be reported as a strength.
+                    </p>
+                    {versionDetail.factors!.map((f) => {
+                      let reversed = false;
+                      try {
+                        reversed = (JSON.parse(scoringJson || "{}").reverseScoredFactors || []).includes(f.code);
+                      } catch {
+                        // JSON is being edited by hand; leave the box unticked
+                      }
+                      return (
+                        <label key={f.id} className="flex items-center gap-2 text-sm text-[#2D241E]">
+                          <input
+                            type="checkbox"
+                            checked={reversed}
+                            disabled={!isVersionDraft || scoringSubmitting}
+                            onChange={(e) => {
+                              let cfg: Record<string, unknown>;
+                              try {
+                                cfg = JSON.parse(scoringJson || "{}");
+                              } catch {
+                                setScoringError("Fix the JSON syntax below before changing the scoring direction.");
+                                return;
+                              }
+                              const current = new Set<string>((cfg.reverseScoredFactors as string[]) || []);
+                              if (e.target.checked) current.add(f.code);
+                              else current.delete(f.code);
+                              cfg.reverseScoredFactors = Array.from(current);
+                              setScoringJson(JSON.stringify(cfg, null, 2));
+                            }}
+                          />
+                          <span>
+                            {f.name} <span className="text-xs text-[#8A796E]">({f.code})</span>
+                            {reversed ? " — higher score = more concerning (reverse-scored)" : " — higher score = positive"}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </fieldset>
+                )}
+
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold uppercase tracking-wider text-[#5C4D42]">
@@ -1475,6 +1522,7 @@ export default function AdminAssessmentWorkspacePage() {
                           strengthsThresholdPct: 75,
                           growthThresholdPct: 50,
                           guidanceTemplates: templateGuidance,
+                          reverseScoredFactors: [],
                         };
                         setScoringJson(JSON.stringify(starter, null, 2));
                       }}

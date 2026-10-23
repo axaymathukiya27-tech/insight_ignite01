@@ -24,3 +24,26 @@ html {
   outline: 2px solid #8C5E42;
   outline-offset: 2px;
 }
+
+/* Print / Save PDF: the Parenting Growth Summary prints the same content as the web
+   report. Only site navigation and on-screen controls are hidden. */
+@media print {
+  header,
+  footer {
+    display: none !important;
+  }
+  .report-root {
+    margin: 0 !important;
+    max-width: none !important;
+  }
+  .report-root * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .report-card {
+    break-inside: avoid;
+  }
+  .report-section h2 {
+    break-after: avoid;
+  }
+}

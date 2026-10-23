@@ -21,8 +21,10 @@ import {
   calculateAssessmentScores,
   AssessmentError,
   RawOptionWithWeight,
+  ApprovedScoringConfigSchema,
 } from "./scoring.service";
 import { getApprovedCourseRecommendations } from "./recommendations.service";
+import { steadyAreasFromScores } from "./report-content";
 import { generateSecureToken, hashToken } from "./token.util";
 
 export { AssessmentError };
@@ -265,6 +267,7 @@ export async function submitAssessment(
     factorScores: computed.factorScores,
     strengths: computed.strengths,
     growthAreas: computed.growthAreas,
+    steadyAreas: computed.steadyAreas,
     recommendedCourses,
     disclaimer:
       version.disclaimerText ||
@@ -343,14 +346,23 @@ export async function getAssessmentResult(
     }
   }
 
+  const storedScores = submission.result.factorScores as unknown as Record<string, FactorScoreDto>;
+  const parsedConfig = ApprovedScoringConfigSchema.safeParse(submission.version.scoringConfig);
+
   return {
     submissionId: submission.id,
     versionNumber: submission.version.versionNumber,
     completedAt: submission.completedAt ? submission.completedAt.toISOString() : submission.createdAt.toISOString(),
     isAnonymous: submission.userId === null,
-    factorScores: submission.result.factorScores as unknown as Record<string, FactorScoreDto>,
+    factorScores: storedScores,
     strengths: (submission.result.strengths as unknown as AreaSummaryDto[]) || [],
     growthAreas: (submission.result.growthAreas as unknown as AreaSummaryDto[]) || [],
+    // Not stored separately: rebuilt from the stored classification (results calculated
+    // after the scoring-direction fix). Older results have no classification, so none.
+    steadyAreas: steadyAreasFromScores(
+      storedScores,
+      parsedConfig.success ? parsedConfig.data.guidanceTemplates : undefined
+    ),
     recommendedCourses: (submission.result.recommendationsSummary as unknown as AssessmentRecommendationDto[]) || [],
     disclaimer:
       submission.version.disclaimerText ||
