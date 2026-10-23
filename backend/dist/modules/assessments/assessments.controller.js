@@ -1,11 +1,17 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleGetActiveAssessment = handleGetActiveAssessment;
+exports.handleListActiveAssessments = handleListActiveAssessments;
 exports.handleSubmitAssessment = handleSubmitAssessment;
 exports.handleGetResult = handleGetResult;
 exports.handleClaimAssessment = handleClaimAssessment;
 exports.handleGetMyAssessmentHistory = handleGetMyAssessmentHistory;
+exports.handleGetAssessmentProgress = handleGetAssessmentProgress;
+exports.handleGetPracticePlan = handleGetPracticePlan;
+exports.handleStartPracticePlan = handleStartPracticePlan;
+exports.handleUpdatePracticeDay = handleUpdatePracticeDay;
 const assessments_service_1 = require("./assessments.service");
+const practice_plan_service_1 = require("./practice-plan.service");
 const token_util_1 = require("./token.util");
 const response_1 = require("../../utils/response");
 async function handleGetActiveAssessment(req, res, next) {
@@ -14,6 +20,16 @@ async function handleGetActiveAssessment(req, res, next) {
         const slug = req.query.slug || undefined;
         const instrument = await (0, assessments_service_1.getActiveAssessment)(slug);
         (0, response_1.sendSuccess)(res, { instrument }, undefined, 200, requestId);
+    }
+    catch (error) {
+        next(error);
+    }
+}
+async function handleListActiveAssessments(req, res, next) {
+    try {
+        const requestId = req.headers["x-request-id"];
+        const assessments = await (0, assessments_service_1.listActiveAssessments)();
+        (0, response_1.sendSuccess)(res, { assessments }, undefined, 200, requestId);
     }
     catch (error) {
         next(error);
@@ -68,6 +84,46 @@ async function handleGetMyAssessmentHistory(req, res, next) {
         const requestId = req.headers["x-request-id"];
         const history = await (0, assessments_service_1.getUserAssessmentHistory)(req.user.id);
         (0, response_1.sendSuccess)(res, { history }, undefined, 200, requestId);
+    }
+    catch (error) {
+        next(error);
+    }
+}
+async function handleGetAssessmentProgress(req, res, next) {
+    try {
+        const requestId = req.headers["x-request-id"];
+        const progress = await (0, assessments_service_1.getAssessmentProgress)(String(req.params.slug), req.user);
+        (0, response_1.sendSuccess)(res, { progress }, undefined, 200, requestId);
+    }
+    catch (error) {
+        next(error);
+    }
+}
+async function handleGetPracticePlan(req, res, next) {
+    try {
+        const requestId = req.headers["x-request-id"];
+        const plan = await (0, practice_plan_service_1.getPracticePlan)(String(req.params.id), req.user);
+        (0, response_1.sendSuccess)(res, { plan }, undefined, 200, requestId);
+    }
+    catch (error) {
+        next(error);
+    }
+}
+async function handleStartPracticePlan(req, res, next) {
+    try {
+        const requestId = req.headers["x-request-id"];
+        const plan = await (0, practice_plan_service_1.startPracticePlan)(String(req.params.id), req.user);
+        (0, response_1.sendSuccess)(res, { plan }, "Your seven-day practice plan has started.", 200, requestId);
+    }
+    catch (error) {
+        next(error);
+    }
+}
+async function handleUpdatePracticeDay(req, res, next) {
+    try {
+        const requestId = req.headers["x-request-id"];
+        const plan = await (0, practice_plan_service_1.updatePracticeDay)(String(req.params.id), Number(req.params.day), req.body, req.user);
+        (0, response_1.sendSuccess)(res, { plan }, undefined, 200, requestId);
     }
     catch (error) {
         next(error);

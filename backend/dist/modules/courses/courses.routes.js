@@ -12,6 +12,8 @@ const router = (0, express_1.Router)();
 // Only returns courses where status = PUBLISHED
 // =============================================================================
 router.get("/", courses_controller_1.handleGetPublicCourses);
+// The signed-in learner's own enrollments (declared before /:slug)
+router.get("/my/enrollments", auth_middleware_1.requireAuth, courses_controller_1.handleGetMyEnrollments);
 router.get("/:slug", courses_controller_1.handleGetPublicCourseBySlug);
 // =============================================================================
 // Protected Admin Course Management Routes

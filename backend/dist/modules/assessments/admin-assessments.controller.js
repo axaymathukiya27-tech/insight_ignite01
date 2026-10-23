@@ -1,5 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.handleApproveVersion = handleApproveVersion;
+exports.handleActivateVersion = handleActivateVersion;
 exports.handleListInstruments = handleListInstruments;
 exports.handleCreateInstrument = handleCreateInstrument;
 exports.handleGetInstrumentDetail = handleGetInstrumentDetail;
@@ -18,6 +20,26 @@ exports.handleDeleteCourseMapping = handleDeleteCourseMapping;
 exports.handleCheckActivationReadiness = handleCheckActivationReadiness;
 const admin_assessments_service_1 = require("./admin-assessments.service");
 const response_1 = require("../../utils/response");
+async function handleApproveVersion(req, res, next) {
+    try {
+        const requestId = req.headers["x-request-id"];
+        const result = await (0, admin_assessments_service_1.approveDraftVersion)(req.params.versionId, String(req.body?.approverName ?? ""), req.user);
+        (0, response_1.sendSuccess)(res, result, result.message, 200, requestId);
+    }
+    catch (error) {
+        next(error);
+    }
+}
+async function handleActivateVersion(req, res, next) {
+    try {
+        const requestId = req.headers["x-request-id"];
+        const result = await (0, admin_assessments_service_1.activateVersion)(req.params.versionId, req.user);
+        (0, response_1.sendSuccess)(res, result, result.message, 200, requestId);
+    }
+    catch (error) {
+        next(error);
+    }
+}
 async function handleListInstruments(req, res, next) {
     try {
         const requestId = req.headers["x-request-id"];

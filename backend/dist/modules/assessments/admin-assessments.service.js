@@ -16,6 +16,8 @@ exports.updateVersionScoringConfig = updateVersionScoringConfig;
 exports.createCourseMapping = createCourseMapping;
 exports.deleteCourseMapping = deleteCourseMapping;
 exports.checkActivationReadiness = checkActivationReadiness;
+exports.approveDraftVersion = approveDraftVersion;
+exports.activateVersion = activateVersion;
 const database_1 = require("@insight-ignite/database");
 const scoring_service_1 = require("./scoring.service");
 /**
@@ -178,18 +180,75 @@ async function createDraftVersion(instrumentId, input, actor) {
     }
     const latestVersionNumber = instrument.versions.length > 0 ? instrument.versions[0].versionNumber : 0;
     const newVersionNumber = latestVersionNumber + 1;
+    // The new draft starts as a copy of the latest version (factors, questions, scoring
+    // configuration and course mappings), so a correction does not mean re-typing every
+    // question. The earlier version itself is never modified.
+    const source = instrument.versions.length > 0
+        ? await database_1.prisma.assessmentVersion.findUnique({
+            where: {
+                instrumentId_versionNumber: { instrumentId: instrument.id, versionNumber: latestVersionNumber },
+            },
+            include: { factors: true, items: true, courseMappings: true },
+        })
+        : null;
     const result = await database_1.prisma.$transaction(async (tx) => {
         const version = await tx.assessmentVersion.create({
             data: {
                 instrumentId: instrument.id,
                 versionNumber: newVersionNumber,
                 status: database_1.AssessmentStatus.DRAFT,
+                scoringConfig: (source?.scoringConfig ?? undefined),
                 disclaimerText: input.disclaimerText ||
+                    source?.disclaimerText ||
                     "This self-assessment is an educational self-reflection tool, not a diagnostic or clinical evaluation.",
                 instructionsText: input.instructionsText ||
+                    source?.instructionsText ||
                     "Please answer each reflective prompt honestly based on your typical reactions in daily parenting interactions.",
             },
         });
+        if (source) {
+            const factorIdMap = new Map();
+            for (const f of source.factors) {
+                const copy = await tx.assessmentFactorDefinition.create({
+                    data: {
+                        versionId: version.id,
+                        code: f.code,
+                        name: f.name,
+                        tagline: f.tagline,
+                        description: f.description,
+                        orderIndex: f.orderIndex,
+                    },
+                });
+                factorIdMap.set(f.id, copy.id);
+            }
+            for (const it of source.items) {
+                await tx.assessmentItem.create({
+                    data: {
+                        versionId: version.id,
+                        factorId: factorIdMap.get(it.factorId),
+                        itemKey: it.itemKey,
+                        orderIndex: it.orderIndex,
+                        prompt: it.prompt,
+                        contextPrompt: it.contextPrompt,
+                        responseType: it.responseType,
+                        options: it.options,
+                        isRequired: it.isRequired,
+                    },
+                });
+            }
+            for (const m of source.courseMappings) {
+                await tx.assessmentCourseMapping.create({
+                    data: {
+                        versionId: version.id,
+                        factorId: factorIdMap.get(m.factorId),
+                        courseId: m.courseId,
+                        triggerCondition: m.triggerCondition,
+                        displayOrder: m.displayOrder,
+                        customGuidance: m.customGuidance,
+                    },
+                });
+            }
+        }
         await tx.assessmentAuditLog.create({
             data: {
                 instrumentId: instrument.id,
@@ -200,6 +259,7 @@ async function createDraftVersion(instrumentId, input, actor) {
                 metadata: {
                     versionNumber: newVersionNumber,
                     status: database_1.AssessmentStatus.DRAFT,
+                    copiedFromVersion: source ? source.versionNumber : null,
                 },
             },
         });
@@ -788,6 +848,11 @@ async function updateVersionScoringConfig(versionId, rawConfig, actor) {
             }
         }
     }
+    for (const factorCode of validConfig.reverseScoredFactors) {
+        if (!definedCodes.has(factorCode)) {
+            throw new scoring_service_1.AssessmentError(`reverseScoredFactors references factor code '${factorCode}' which is not defined in this version. Defined factors: [${Array.from(definedCodes).join(", ")}]`, 400, "SCORING_CONFIG_INCONSISTENT");
+        }
+    }
     await database_1.prisma.$transaction(async (tx) => {
         await tx.assessmentVersion.update({
             where: { id: versionId },
@@ -1070,6 +1135,12 @@ async function checkActivationReadiness(versionId) {
                 guidanceMessage = `Guidance templates reference unknown factor(s): [${missingInFactors.join(", ")}].`;
             }
         }
+        const definedForReverse = new Set(version.factors.map((f) => f.code));
+        const unknownReverse = (config.reverseScoredFactors || []).filter((code) => !definedForReverse.has(code));
+        if (unknownReverse.length > 0) {
+            guidanceConsistent = false;
+            guidanceMessage = `reverseScoredFactors reference unknown factor(s): [${unknownReverse.join(", ")}].`;
+        }
     }
     checks.push({
         id: "SCORING_GUIDANCE_CONSISTENT",
@@ -1134,6 +1205,109 @@ async function checkActivationReadiness(versionId) {
         isReadyForActivation,
         checks,
         missingRequirements,
+    };
+}
+// ---------------------------------------------------------------------------
+// 6. Professional Approval & Activation (Publishing)
+// ---------------------------------------------------------------------------
+/**
+ * Records the professional sign-off for a draft version. The approver's name
+ * is typed by the admin so the record shows who reviewed the content.
+ */
+async function approveDraftVersion(versionId, approverName, actor) {
+    const version = await database_1.prisma.assessmentVersion.findUnique({
+        where: { id: versionId },
+    });
+    if (!version) {
+        throw new scoring_service_1.AssessmentError(`Assessment version '${versionId}' not found.`, 404, "VERSION_NOT_FOUND");
+    }
+    assertVersionIsDraft(version.status, version.versionNumber);
+    const name = approverName.trim();
+    if (name.length < 2) {
+        throw new scoring_service_1.AssessmentError("Enter the name of the person approving this version.", 400, "APPROVER_REQUIRED");
+    }
+    const approvedAt = new Date();
+    await database_1.prisma.$transaction(async (tx) => {
+        await tx.assessmentVersion.update({
+            where: { id: versionId },
+            data: { approvedBy: name, approvedAt },
+        });
+        await tx.assessmentAuditLog.create({
+            data: {
+                instrumentId: version.instrumentId,
+                versionId: version.id,
+                actorUserId: actor.id,
+                actorEmail: actor.email,
+                action: "VERSION_APPROVED",
+                metadata: { approvedBy: name, approvedAt: approvedAt.toISOString() },
+            },
+        });
+    });
+    return {
+        success: true,
+        message: `Version ${version.versionNumber} approved by ${name}.`,
+    };
+}
+/**
+ * Publishes a draft version so participants can take it. Every readiness
+ * check must pass. Any previously active version of the same instrument is
+ * retired in the same transaction, so exactly one version is live.
+ */
+async function activateVersion(versionId, actor) {
+    const report = await checkActivationReadiness(versionId);
+    if (report.status !== "DRAFT") {
+        throw new scoring_service_1.AssessmentError(`Version ${report.versionNumber} is ${report.status} and cannot be published again.`, 400, "VERSION_NOT_DRAFT");
+    }
+    if (!report.isReadyForActivation) {
+        throw new scoring_service_1.AssessmentError("This version is not ready to publish yet.", 400, "NOT_READY_FOR_ACTIVATION", report.missingRequirements);
+    }
+    const version = await database_1.prisma.assessmentVersion.findUniqueOrThrow({
+        where: { id: versionId },
+    });
+    const now = new Date();
+    const retired = await database_1.prisma.$transaction(async (tx) => {
+        const previouslyActive = await tx.assessmentVersion.findMany({
+            where: { instrumentId: version.instrumentId, status: database_1.AssessmentStatus.ACTIVE },
+            select: { id: true, versionNumber: true },
+        });
+        if (previouslyActive.length > 0) {
+            await tx.assessmentVersion.updateMany({
+                where: { id: { in: previouslyActive.map((v) => v.id) } },
+                data: { status: database_1.AssessmentStatus.RETIRED, retiredAt: now },
+            });
+        }
+        await tx.assessmentVersion.update({
+            where: { id: versionId },
+            data: { status: database_1.AssessmentStatus.ACTIVE, publishedAt: now },
+        });
+        await tx.assessmentInstrument.update({
+            where: { id: version.instrumentId },
+            data: {
+                status: database_1.AssessmentStatus.ACTIVE,
+                approvedBy: version.approvedBy,
+                approvedAt: version.approvedAt,
+            },
+        });
+        await tx.assessmentAuditLog.create({
+            data: {
+                instrumentId: version.instrumentId,
+                versionId: version.id,
+                actorUserId: actor.id,
+                actorEmail: actor.email,
+                action: "VERSION_ACTIVATED",
+                metadata: {
+                    versionNumber: version.versionNumber,
+                    retiredVersionNumbers: previouslyActive.map((v) => v.versionNumber),
+                },
+            },
+        });
+        return previouslyActive;
+    });
+    return {
+        success: true,
+        message: retired.length > 0
+            ? `Version ${version.versionNumber} is now live. Version ${retired.map((v) => v.versionNumber).join(", ")} was retired.`
+            : `Version ${version.versionNumber} is now live.`,
     };
 }
 // ---------------------------------------------------------------------------

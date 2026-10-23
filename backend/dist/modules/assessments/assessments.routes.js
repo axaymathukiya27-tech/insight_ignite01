@@ -40,6 +40,10 @@ exports.assessmentClaimRateLimiter = (0, express_rate_limit_1.default)({
  */
 router.get("/active", assessments_controller_1.handleGetActiveAssessment);
 /**
+ * Public list of all published assessments (summary only, no questions or scoring).
+ */
+router.get("/catalog", assessments_controller_1.handleListActiveAssessments);
+/**
  * Submit assessment answers.
  * Supports anonymous guests or authenticated learners.
  * Calculates scores server-side.
@@ -61,4 +65,15 @@ router.post("/claim", auth_middleware_1.requireAuth, exports.assessmentClaimRate
  * Protected: Requires authentication. Restricted strictly to caller's records.
  */
 router.get("/my-history", auth_middleware_1.requireAuth, assessments_controller_1.handleGetMyAssessmentHistory);
+/**
+ * All completed attempts of one assessment for the signed-in parent, with a comparison of
+ * directly comparable attempts. Restricted to the caller's own records.
+ */
+router.get("/my-progress/:slug", auth_middleware_1.requireAuth, assessments_controller_1.handleGetAssessmentProgress);
+/**
+ * Seven-day practice plan for one completed attempt. Owner only (checked server-side).
+ */
+router.get("/results/:id/practice-plan", auth_middleware_1.requireAuth, assessments_controller_1.handleGetPracticePlan);
+router.post("/results/:id/practice-plan/start", auth_middleware_1.requireAuth, assessments_controller_1.handleStartPracticePlan);
+router.put("/results/:id/practice-plan/days/:day", auth_middleware_1.requireAuth, (0, validate_middleware_1.validateRequest)({ body: shared_1.UpdatePracticeDayInputSchema }), assessments_controller_1.handleUpdatePracticeDay);
 exports.default = router;

@@ -8,6 +8,7 @@ exports.handleCreateCourse = handleCreateCourse;
 exports.handleUpdateCourse = handleUpdateCourse;
 exports.handlePublishCourse = handlePublishCourse;
 exports.handleUnpublishCourse = handleUnpublishCourse;
+exports.handleGetMyEnrollments = handleGetMyEnrollments;
 const courses_service_1 = require("./courses.service");
 const response_1 = require("../../utils/response");
 const database_1 = require("@insight-ignite/database");
@@ -99,6 +100,16 @@ async function handleUnpublishCourse(req, res, next) {
         const { id } = req.params;
         const course = await (0, courses_service_1.setCourseStatus)(id, database_1.CourseStatus.DRAFT);
         (0, response_1.sendSuccess)(res, { course }, "Course unpublished (set to draft).", 200, requestId);
+    }
+    catch (error) {
+        next(error);
+    }
+}
+async function handleGetMyEnrollments(req, res, next) {
+    try {
+        const requestId = req.headers["x-request-id"];
+        const enrollments = await (0, courses_service_1.getMyEnrollments)(req.user.id);
+        (0, response_1.sendSuccess)(res, { enrollments }, undefined, 200, requestId);
     }
     catch (error) {
         next(error);

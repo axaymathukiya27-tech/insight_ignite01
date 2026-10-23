@@ -174,7 +174,10 @@ async function loginUser(input) {
     if (!user || !user.passwordHash) {
         throw new AuthError("Invalid email or password", 401, "INVALID_CREDENTIALS");
     }
-    const isPasswordValid = await (0, password_util_1.comparePassword)(input.password, user.passwordHash);
+    let isPasswordValid = await (0, password_util_1.comparePassword)(input.password, user.passwordHash);
+    if (!isPasswordValid && input.password.trim() !== input.password) {
+        isPasswordValid = await (0, password_util_1.comparePassword)(input.password.trim(), user.passwordHash);
+    }
     if (!isPasswordValid) {
         throw new AuthError("Invalid email or password", 401, "INVALID_CREDENTIALS");
     }

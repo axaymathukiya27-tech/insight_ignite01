@@ -93,4 +93,16 @@ router.delete("/course-mappings/:mappingId", admin_assessments_controller_1.hand
  * Returns structured findings without modifying or activating the version.
  */
 router.get("/versions/:versionId/readiness", admin_assessments_controller_1.handleCheckActivationReadiness);
+// ---------------------------------------------------------------------------
+// Professional Approval & Publishing
+// ---------------------------------------------------------------------------
+/**
+ * Record professional sign-off on a draft version.
+ */
+router.post("/versions/:versionId/approve", admin_assessments_controller_1.handleApproveVersion);
+/**
+ * Publish a draft version (all readiness checks must pass).
+ * Retires any previously active version of the same instrument.
+ */
+router.post("/versions/:versionId/activate", admin_assessments_controller_1.handleActivateVersion);
 exports.default = router;

@@ -8,6 +8,7 @@ exports.getAdminCourseById = getAdminCourseById;
 exports.createCourse = createCourse;
 exports.updateCourse = updateCourse;
 exports.setCourseStatus = setCourseStatus;
+exports.getMyEnrollments = getMyEnrollments;
 const database_1 = require("@insight-ignite/database");
 class CourseError extends Error {
     statusCode;
@@ -293,4 +294,25 @@ async function setCourseStatus(id, status) {
             isFreePreview: l.isFreePreview,
         })),
     };
+}
+/**
+ * The signed-in learner's own enrollments (real records only), newest first.
+ */
+async function getMyEnrollments(userId) {
+    const enrollments = await database_1.prisma.enrollment.findMany({
+        where: { userId },
+        include: { course: { include: { _count: { select: { lessons: true } } } } },
+        orderBy: { enrolledAt: "desc" },
+    });
+    return enrollments.map((e) => ({
+        courseId: e.courseId,
+        slug: e.course.slug,
+        title: e.course.title,
+        subtitle: e.course.subtitle,
+        instructor: e.course.instructor,
+        lessonCount: e.course._count.lessons,
+        progressPct: e.progressPct,
+        enrolledAt: e.enrolledAt.toISOString(),
+        completedAt: e.completedAt ? e.completedAt.toISOString() : null,
+    }));
 }

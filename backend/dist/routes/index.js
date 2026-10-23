@@ -9,6 +9,8 @@ const auth_routes_1 = __importDefault(require("../modules/auth/auth.routes"));
 const courses_routes_1 = __importDefault(require("../modules/courses/courses.routes"));
 const assessments_routes_1 = __importDefault(require("../modules/assessments/assessments.routes"));
 const admin_assessments_routes_1 = __importDefault(require("../modules/assessments/admin-assessments.routes"));
+const contact_routes_1 = __importDefault(require("../modules/contact/contact.routes"));
+const admin_routes_1 = __importDefault(require("../modules/admin/admin.routes"));
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const database_1 = require("@insight-ignite/database");
 const response_1 = require("../utils/response");
@@ -19,6 +21,8 @@ apiRouter.use("/auth", auth_routes_1.default);
 apiRouter.use("/courses", courses_routes_1.default);
 apiRouter.use("/assessments", assessments_routes_1.default);
 apiRouter.use("/admin/assessments", admin_assessments_routes_1.default);
+apiRouter.use("/contact", contact_routes_1.default);
+apiRouter.use("/admin/platform", admin_routes_1.default);
 // Protected learner route (requires authenticated session AND verified email)
 apiRouter.get("/learner/profile", auth_middleware_1.requireAuth, auth_middleware_1.requireVerifiedEmail, (req, res) => {
     const requestId = req.headers["x-request-id"];
