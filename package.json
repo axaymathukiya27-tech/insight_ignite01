@@ -1,0 +1,28 @@
+{
+  "name": "insight-ignite-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "database",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@insight-ignite/frontend",
+    "dev:frontend": "npm run dev --workspace=@insight-ignite/frontend",
+    "dev:backend": "npm run dev --workspace=@insight-ignite/backend",
+    "build": "npm run build --workspaces --if-present",
+    "build:frontend": "npm run build --workspace=@insight-ignite/frontend",
+    "build:backend": "npm run build --workspace=@insight-ignite/backend",
+    "start": "npm run start --workspace=@insight-ignite/frontend",
+    "start:backend": "npm run start --workspace=@insight-ignite/backend",
+    "lint": "npm run lint --workspaces --if-present",
+    "lint:frontend": "npm run lint --workspace=@insight-ignite/frontend",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate": "node --import tsx scripts/database/migrate.ts",
+    "db:seed": "node --import tsx scripts/development/seed-dev.ts",
+    "check:env": "node --import tsx scripts/deployment/check-env.ts",
+    "admin:provision": "node --import tsx scripts/security/seed-admin.ts"
+  }
+}

@@ -1,0 +1,18 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_controller_1 = require("./auth.controller");
+const validate_middleware_1 = require("../../middleware/validate.middleware");
+const auth_middleware_1 = require("../../middleware/auth.middleware");
+const rate_limit_middleware_1 = require("../../middleware/rate-limit.middleware");
+const shared_1 = require("@insight-ignite/shared");
+const router = (0, express_1.Router)();
+router.post("/register", rate_limit_middleware_1.registerRateLimiter, (0, validate_middleware_1.validateRequest)({ body: shared_1.RegisterUserInputSchema }), auth_controller_1.handleRegister);
+router.post("/verify-email", (0, validate_middleware_1.validateRequest)({ body: shared_1.VerifyEmailInputSchema }), auth_controller_1.handleVerifyEmail);
+router.post("/resend-verification", (0, validate_middleware_1.validateRequest)({ body: shared_1.ResendVerificationInputSchema }), auth_controller_1.handleResendVerification);
+router.post("/login", rate_limit_middleware_1.loginRateLimiter, (0, validate_middleware_1.validateRequest)({ body: shared_1.LoginUserInputSchema }), auth_controller_1.handleLogin);
+router.get("/me", auth_middleware_1.requireAuth, auth_controller_1.handleGetMe);
+router.post("/logout", auth_controller_1.handleLogout);
+router.post("/forgot-password", rate_limit_middleware_1.forgotPasswordRateLimiter, (0, validate_middleware_1.validateRequest)({ body: shared_1.ForgotPasswordInputSchema }), auth_controller_1.handleForgotPassword);
+router.post("/reset-password", (0, validate_middleware_1.validateRequest)({ body: shared_1.ResetPasswordInputSchema }), auth_controller_1.handleResetPassword);
+exports.default = router;

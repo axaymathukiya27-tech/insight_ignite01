@@ -1,0 +1,453 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  PUBLIC_VISITOR
+  LEARNER
+  PARENT
+  TEACHER
+  SCHOOL_ADMIN
+  PLATFORM_ADMIN
+}
+
+enum CourseStatus {
+  DRAFT
+  DEVELOPMENT_PREVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum InquiryStatus {
+  NEW
+  IN_PROGRESS
+  RESPONDED
+  ARCHIVED
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  fullName      String
+  role          UserRole  @default(LEARNER)
+  passwordHash  String?
+  emailVerified DateTime?
+  isActive      Boolean   @default(true)
+  avatarUrl     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions              Session[]
+  enrollments           Enrollment[]
+  orders                Order[]
+  progress              LessonProgress[]
+  assessmentSubmissions AssessmentSubmission[]
+  assessmentAuditLogs   AssessmentAuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  sessionToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("password_reset_tokens")
+}
+
+model Course {
+  id           String       @id @default(uuid())
+  slug         String       @unique
+  title        String
+  subtitle     String?
+  description  String
+  priceAmount  Int          @default(0) // Integer minor currency units (paisa)
+  currency     String       @default("INR")
+  status       CourseStatus @default(DEVELOPMENT_PREVIEW)
+  instructor   String       @default("Dr. Nivedita Ganguli")
+  thumbnailUrl String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  lessons                  Lesson[]
+  enrollments              Enrollment[]
+  orders                   Order[]
+  assessmentCourseMappings AssessmentCourseMapping[]
+
+  @@map("courses")
+}
+
+model Lesson {
+  id            String   @id @default(uuid())
+  courseId      String
+  title         String
+  slug          String?
+  description   String?
+  orderIndex    Int
+  durationMin   Int?
+  videoUrl      String?
+  isFreePreview Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  course   Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progress LessonProgress[]
+
+  @@unique([courseId, orderIndex])
+  @@index([courseId])
+  @@map("lessons")
+}
+
+model Enrollment {
+  id          String    @id @default(uuid())
+  userId      String
+  courseId    String
+  enrolledAt  DateTime  @default(now())
+  progressPct Int       @default(0)
+  completedAt DateTime?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+  @@map("enrollments")
+}
+
+model LessonProgress {
+  id              String    @id @default(uuid())
+  userId          String
+  lessonId        String
+  completed       Boolean   @default(false)
+  completedAt     DateTime?
+  lastPositionSec Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@index([lessonId])
+  @@map("lesson_progress")
+}
+
+model Order {
+  id        String      @id @default(uuid())
+  userId    String
+  courseId  String
+  amount    Int         // Minor units (paisa)
+  currency  String      @default("INR")
+  status    OrderStatus @default(PENDING)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  course   Course    @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  payments Payment[]
+
+  @@index([userId])
+  @@index([courseId])
+  @@map("orders")
+}
+
+model Payment {
+  id               String        @id @default(uuid())
+  orderId          String
+  paymentGateway   String        @default("RAZORPAY")
+  gatewayPaymentId String?       @unique
+  gatewayOrderId   String?
+  gatewaySignature String?
+  amount           Int           // Minor units (paisa)
+  currency         String        @default("INR")
+  status           PaymentStatus @default(PENDING)
+  errorMessage     String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+model ContactInquiry {
+  id           String        @id @default(uuid())
+  name         String
+  email        String
+  phone        String?
+  organization String?
+  inquiryType  String        // e.g. "parenting", "schools", "adolescent", "corporate", "general"
+  message      String
+  status       InquiryStatus @default(NEW)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([createdAt])
+  @@map("contact_inquiries")
+}
+
+enum AssessmentStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+enum AssessmentSubmissionStatus {
+  IN_PROGRESS
+  SUBMITTED
+  CLAIMED
+  ABANDONED
+}
+
+model AssessmentInstrument {
+  id                String               @id @default(uuid())
+  slug              String               @unique
+  title             String
+  subtitle          String?
+  description       String
+  category          String               @default("parenting")
+  intendedAudience  String?
+  status            AssessmentStatus     @default(DRAFT)
+  approvedBy        String?
+  approvedAt        DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  versions          AssessmentVersion[]
+  auditLogs         AssessmentAuditLog[]
+
+  @@map("assessment_instruments")
+}
+
+model AssessmentRawResponse {
+  id               String               @id @default(uuid())
+  submissionId     String
+  itemId           String
+  selectedOptionId String
+  numericValue     Int?
+  answeredAt       DateTime             @default(now())
+
+  submission       AssessmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  item             AssessmentItem       @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([submissionId, itemId])
+  @@index([submissionId])
+  @@index([itemId])
+  @@map("assessment_raw_responses")
+}
+
+model AssessmentVersion {
+  id                String                       @id @default(uuid())
+  instrumentId      String
+  versionNumber     Int
+  status            AssessmentStatus             @default(DRAFT)
+  scoringConfig     Json?
+  disclaimerText    String?
+  instructionsText  String?
+  publishedAt       DateTime?
+  retiredAt         DateTime?
+  approvedBy        String?
+  approvedAt        DateTime?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+
+  instrument        AssessmentInstrument         @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+  factors           AssessmentFactorDefinition[]
+  items             AssessmentItem[]
+  submissions       AssessmentSubmission[]
+  results           AssessmentResult[]
+  courseMappings    AssessmentCourseMapping[]
+  auditLogs         AssessmentAuditLog[]
+
+  @@unique([instrumentId, versionNumber])
+  @@index([instrumentId])
+  @@index([status])
+  @@map("assessment_versions")
+}
+
+model AssessmentFactorDefinition {
+  id             String                     @id @default(uuid())
+  versionId      String
+  code           String
+  name           String
+  tagline        String?
+  description    String?
+  orderIndex     Int
+
+  version        AssessmentVersion          @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  items          AssessmentItem[]
+  courseMappings AssessmentCourseMapping[]
+
+  @@unique([versionId, code])
+  @@unique([versionId, orderIndex])
+  @@index([versionId])
+  @@map("assessment_factor_definitions")
+}
+
+model AssessmentItem {
+  id             String                     @id @default(uuid())
+  versionId      String
+  factorId       String
+  itemKey        String
+  orderIndex     Int
+  prompt         String
+  contextPrompt  String?
+  responseType   String                     @default("SINGLE_CHOICE")
+  options        Json
+  isRequired     Boolean                    @default(true)
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  version        AssessmentVersion          @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  factor         AssessmentFactorDefinition @relation(fields: [factorId], references: [id], onDelete: Restrict)
+  rawResponses   AssessmentRawResponse[]
+
+  @@unique([versionId, itemKey])
+  @@unique([versionId, orderIndex])
+  @@index([versionId])
+  @@index([factorId])
+  @@map("assessment_items")
+}
+
+model AssessmentSubmission {
+  id                   String                     @id @default(uuid())
+  versionId            String
+  userId               String?
+  accessKeyHash        String?                    @unique
+  claimTokenHash       String?                    @unique
+  status               AssessmentSubmissionStatus @default(IN_PROGRESS)
+  startedAt            DateTime                   @default(now())
+  completedAt          DateTime?
+  expiresAt            DateTime?
+  consentGiven         Boolean
+  consentNoticeVersion String
+  consentGivenAt       DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  version              AssessmentVersion          @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  user                 User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  rawResponses         AssessmentRawResponse[]
+  result               AssessmentResult?
+
+  @@index([userId])
+  @@index([versionId])
+  @@index([accessKeyHash])
+  @@index([claimTokenHash])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("assessment_submissions")
+}
+
+model AssessmentResult {
+  id                     String               @id @default(uuid())
+  submissionId           String               @unique
+  versionId              String
+  factorScores           Json
+  overallScore           Int?
+  strengths              Json
+  growthAreas            Json
+  recommendationsSummary Json?
+  computedAt             DateTime             @default(now())
+
+  submission             AssessmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  version                AssessmentVersion    @relation(fields: [versionId], references: [id], onDelete: Restrict)
+
+  @@index([versionId])
+  @@map("assessment_results")
+}
+
+model AssessmentCourseMapping {
+  id               String                     @id @default(uuid())
+  versionId        String
+  factorId         String
+  courseId         String
+  triggerCondition String                     @default("GROWTH_OPPORTUNITY")
+  displayOrder     Int                        @default(1)
+  customGuidance   String?
+  createdAt        DateTime                   @default(now())
+
+  version          AssessmentVersion          @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  factor           AssessmentFactorDefinition @relation(fields: [factorId], references: [id], onDelete: Cascade)
+  course           Course                     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, factorId, courseId])
+  @@index([versionId])
+  @@index([factorId])
+  @@index([courseId])
+  @@map("assessment_course_mappings")
+}
+
+model AssessmentAuditLog {
+  id             String                @id @default(uuid())
+  instrumentId   String?
+  versionId      String?
+  actorUserId    String?
+  actorEmail     String?
+  action         String
+  metadata       Json?
+  timestamp      DateTime              @default(now())
+
+  instrument     AssessmentInstrument? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
+  version        AssessmentVersion?    @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  actor          User?                 @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([instrumentId])
+  @@index([versionId])
+  @@index([actorUserId])
+  @@index([timestamp])
+  @@map("assessment_audit_logs")
+}
+

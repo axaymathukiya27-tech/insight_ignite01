@@ -1,0 +1,42 @@
+export enum UserRole {
+  PUBLIC_VISITOR = "PUBLIC_VISITOR",
+  LEARNER = "LEARNER",
+  PARENT = "PARENT",
+  TEACHER = "TEACHER",
+  SCHOOL_ADMIN = "SCHOOL_ADMIN",
+  PLATFORM_ADMIN = "PLATFORM_ADMIN",
+}
+
+export enum CourseStatus {
+  DRAFT = "DRAFT",
+  DEVELOPMENT_PREVIEW = "DEVELOPMENT_PREVIEW",
+  PUBLISHED = "PUBLISHED",
+  ARCHIVED = "ARCHIVED",
+}
+
+export enum OrderStatus {
+  PENDING = "PENDING",
+  PAID = "PAID",
+  FAILED = "FAILED",
+  REFUNDED = "REFUNDED",
+}
+
+export enum PaymentStatus {
+  PENDING = "PENDING",
+  SUCCESS = "SUCCESS",
+  FAILED = "FAILED",
+  REFUNDED = "REFUNDED",
+}
+
+export enum InquiryStatus {
+  NEW = "NEW",
+  IN_PROGRESS = "IN_PROGRESS",
+  RESPONDED = "RESPONDED",
+  ARCHIVED = "ARCHIVED",
+}
+
+export enum AssessmentStatus {
+  DRAFT = "DRAFT",
+  ACTIVE = "ACTIVE",
+  RETIRED = "RETIRED",
+}

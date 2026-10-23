@@ -1,0 +1,15 @@
+/**
+ * Design system design tokens for Insight Ignite.
+ * Stitch aesthetic palette: warm browns, pale sandy creams, dark rich chocolates.
+ */
+
+:root {
+  --color-brand-primary: #8C5E42;
+  --color-brand-primary-hover: #724B34;
+  --color-brand-dark: #5C3925;
+  --color-brand-cream: #FAF8F5;
+  --color-brand-sand: #FAF5EE;
+  --color-brand-border: #E3D8CC;
+  --color-brand-text: #2D241E;
+  --color-brand-muted: #5C4D42;
+}

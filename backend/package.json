@@ -1,0 +1,35 @@
+{
+  "name": "@insight-ignite/backend",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "lint": "echo \"Backend linting placeholder\"",
+    "test": "tsx tests/api.test.ts && tsx tests/database-error.test.ts && tsx tests/auth.test.ts && tsx tests/courses.test.ts && tsx tests/assessments.test.ts && tsx tests/admin-assessments.test.ts"
+  },
+  "dependencies": {
+    "@insight-ignite/database": "*",
+    "@insight-ignite/shared": "*",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.7.1",
+    "nodemailer": "^10.1.7",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.17.19",
+    "@types/nodemailer": "^8.0.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
